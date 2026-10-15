@@ -14,7 +14,7 @@ export const aiChatConfig = {
   apiEndpoint: 'https://www.autodl.art/api/v1/chat/completions',
   
   // API Key (由开发人员指定)
-  apiKey: 'XXXXXXXX',
+  apiKey: 'XXXXXXXXX',
   
   // 使用的模型
   model: 'DeepSeek-V4.1-Flash'
