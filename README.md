@@ -1,6 +1,6 @@
 # AI掘金头条新闻系统 (Toutiao News)
 
-一个基于 **FastAPI + SQLAlchemy** 的现代化新闻系统，包含后端 API 服务（`toutiao_backend`）和前端 Web 应用（`toutiao_frontend`），支持用户注册登录、新闻浏览、收藏、浏览历史等功能。
+一个基于 **FastAPI + SQLAlchemy** 的现代化新闻系统，包含后端 API 服务（`toutiao_backend`）和前端 Web 应用（`toutiao_frontend`），支持用户注册登录、新闻浏览、收藏、浏览历史，以及基于 MySQL 新闻库的 AI 新闻问答与今日简报。
 
 ## ✨ 功能特性
 
@@ -8,6 +8,8 @@
 - **新闻模块**：分类列表、新闻列表（分页 + 分类筛选）、详情、浏览量统计
 - **收藏模块**：添加/取消收藏、收藏列表、清空收藏
 - **浏览历史**：添加记录、历史列表、删除单条、清空历史
+- **AI 新闻问答**：基于新闻库 RAG 检索 + ReAct Agent，SSE 流式回答、来源卡片、历史提问（查看/清空）
+- **今日新闻简报**：按头条、国内、国际、科技、财经、社会、娱乐、体育分类生成 Markdown 简报
 - **缓存优化**：基于 Redis 的新闻详情/列表/分类缓存
 
 ## 🧰 技术栈
@@ -15,6 +17,7 @@
 | 端 | 技术 |
 | --- | --- |
 | 后端 | FastAPI · SQLAlchemy(异步) · aiomysql · passlib/bcrypt · Redis |
+| AI | LangChain · LangGraph · Chroma · OpenAI 兼容接口（Chat + Embedding） |
 | 前端 | Vue 3 · Vite · Pinia · Vue Router · Vant · axios · vue-i18n |
 | 数据库 | MySQL 8+ · Redis 7+ |
 
@@ -30,6 +33,7 @@ Fastapi/
 │   ├── crud/                 # 数据访问层
 │   ├── routers/              # API 路由
 │   ├── utils/                # 认证、密码、响应封装等工具
+│   ├── ai/                   # AI 新闻问答：RAG / Agent / 工具 / 提示词 / 脚本
 │   └── cache/                # Redis 缓存封装
 ├── toutiao_frontend/           # 前端 Web 应用 (Vue 3)
 │   ├── src/
@@ -94,6 +98,50 @@ npm run dev
 
 浏览器访问 Vite 输出的本地地址（默认 <http://localhost:5173>）。前端 API 默认请求 `http://127.0.0.1:8000`，如需修改见 `src/config/api.js`。
 
+### 第四步：初始化 AI 新闻库
+
+1. 在 `toutiao_backend/.env` 中配置模型（不要提交到 git）：
+
+```env
+OPENAI_API_KEY=你的模型Key
+DASHSCOPE_API_KEY=你的模型Key
+BASE_URL=https://你的兼容接口地址/compatible-mode/v1
+MODEL_ID=qwen3.8-max
+EMBEDDING_MODEL=text-embedding-v4
+```
+
+2. 从 MySQL 导出新闻为 txt，并构建 Chroma 向量库：
+
+```bash
+cd toutiao_backend
+
+# 导出 ai/data/news/*.txt（内容未变的文件会跳过）
+python -m ai.scripts.export_news
+
+# 首次全量建索引；后续增量执行去掉 --rebuild
+python -m ai.scripts.build_index --rebuild
+
+# 可选：建完后直接检索验证
+python -m ai.scripts.build_index --query "新年贺词"
+```
+
+3. 确认 `ai_chat` 表存在（首次部署时手动创建）：
+
+```sql
+CREATE TABLE `ai_chat` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int unsigned NOT NULL,
+  `message` text NOT NULL,
+  `response` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `fk_ai_chat_user_idx` (`user_id`),
+  CONSTRAINT `fk_ai_chat_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
+> 新闻新增或修改后，重新执行 `export_news` + `build_index`（增量即可）；删除新闻后 `build_index` 会清理对应向量。
+
 ## 📡 API 概览
 
 | 模块 | 接口 | 说明 |
@@ -115,6 +163,9 @@ npm run dev
 | 历史 | `GET /api/history/list` | 浏览历史列表 |
 | 历史 | `DELETE /api/history/delete/{history_id}` | 删除单条记录 |
 | 历史 | `DELETE /api/history/clear` | 清空历史 |
+| AI | `POST /api/ai/chat` | AI 问答（SSE 流式） |
+| AI | `GET /api/ai/chat/history` | AI 历史提问（分页） |
+| AI | `DELETE /api/ai/chat/history` | 清空 AI 历史 |
 
 ## 🔐 认证方式
 
@@ -130,3 +181,5 @@ Token 有效期为 7 天。
 
 - `API接口规范文档.md` — 接口详细规范
 - `项目后端设计说明文档.md` — 架构与数据库设计说明
+- `AgentRAG改造方案.md` — 本次 AI 新闻问答的改造方案
+- `AgentRAG改造记录.md` — 分阶段操作记录、问题修复与验证结果

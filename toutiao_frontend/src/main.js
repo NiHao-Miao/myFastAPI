@@ -62,9 +62,9 @@ app.use(Toast)
 app.use(Icon)
 app.use(Popup)
 
-// 使用路由和状态管理
-app.use(router)
+// 使用状态管理和路由（Pinia 必须先于 router，路由守卫会读取用户登录态）
 app.use(pinia)
+app.use(router)
 
 app.mount('#app')
 
