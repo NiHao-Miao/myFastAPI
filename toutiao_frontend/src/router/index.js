@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useUserStore } from '../store/user'
 
 const routes = [
   {
@@ -74,7 +75,8 @@ const routes = [
     component: () => import('../views/AIChat.vue'),
     meta: {
       title: 'AI问答',
-      keepAlive: true
+      keepAlive: true,
+      requiresAuth: true
     }
   },
   {
@@ -115,9 +117,14 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   // 设置页面标题
   document.title = to.meta.title || '新闻资讯'
-  
-  // 直接允许访问所有页面
-  next()
+
+  const userStore = useUserStore()
+
+  if (to.meta.requiresAuth && !userStore.token) {
+    next({ path: '/login', query: { redirect: to.fullPath } })
+  } else {
+    next()
+  }
 })
 
 export default router

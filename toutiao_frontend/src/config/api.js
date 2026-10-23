@@ -10,12 +10,9 @@ export const apiConfig = {
 }
 
 export const aiChatConfig = {
-  // OpenAI API地址（实测有效：www.autodl.art/api/v1/chat/completions）
-  apiEndpoint: 'https://www.autodl.art/api/v1/chat/completions',
-  
-  // API Key (由开发人员指定)
-  apiKey: 'XXXXXXXXX',
-  
-  // 使用的模型
-  model: 'DeepSeek-V4.1-Flash'
+  // 后端 AI 问答 SSE 接口
+  chatEndpoint: `${apiConfig.baseURL}/api/ai/chat`,
+
+  // 后端 AI 历史提问接口
+  historyEndpoint: `${apiConfig.baseURL}/api/ai/chat/history`
 }

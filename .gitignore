@@ -24,3 +24,12 @@ dist/
 *.swp
 Thumbs.db
 .DS_Store
+
+# ===== AI / 向量库 =====
+toutiao_backend/ai/chroma_db/
+toutiao_backend/ai/logs/
+toutiao_backend/ai/data/md5.text
+*.tmpdir/
+.e2e-tmp/
+briefing-test*.out
+briefing-test*.err

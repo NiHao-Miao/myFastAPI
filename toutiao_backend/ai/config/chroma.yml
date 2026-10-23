@@ -1,0 +1,11 @@
+# 新闻向量库配置
+collection_name: news
+persist_directory: chroma_db
+data_path: data/news
+md5_hex_store: data/md5.text
+allow_knowledge_file_type: ["txt"]
+k: 5
+
+chunk_size: 500
+chunk_overlap: 50
+separators: ["\n\n", "\n", "。", "！", "？", "；", " ", ""]

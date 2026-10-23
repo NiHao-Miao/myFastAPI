@@ -1,0 +1,7 @@
+# 聊天/向量模型配置
+# 实际值优先使用 toutiao_backend/.env 中的 MODEL_ID / EMBEDDING_MODEL
+chat_model_name: qwen3.8-max
+embedding_model_name: text-embedding-v4
+temperature: 0.2
+request_timeout: 120
+max_tool_calls: 5
