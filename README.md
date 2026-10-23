@@ -1,4 +1,4 @@
-# AI掘金头条新闻系统 (Toutiao News)
+# 新闻资讯 AI 问答系统
 
 一个基于 **FastAPI + SQLAlchemy** 的现代化新闻系统，包含后端 API 服务（`toutiao_backend`）和前端 Web 应用（`toutiao_frontend`），支持用户注册登录、新闻浏览、收藏、浏览历史，以及基于 MySQL 新闻库的 AI 新闻问答与今日简报。
 
