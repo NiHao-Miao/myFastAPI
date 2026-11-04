@@ -5,6 +5,7 @@
 ## ✨ 功能特性
 
 - **用户管理**：注册、登录、信息获取/更新、密码修改
+- **JWT 双令牌认证**：短期 accessToken（JWT）+ 长期 refreshToken（随机串，数据库只存哈希），支持自动刷新、登出撤销、改密强制重新登录
 - **新闻模块**：分类列表、新闻列表（分页 + 分类筛选）、详情、浏览量统计
 - **收藏模块**：添加/取消收藏、收藏列表、清空收藏
 - **浏览历史**：添加记录、历史列表、删除单条、清空历史
@@ -16,7 +17,7 @@
 
 | 端 | 技术 |
 | --- | --- |
-| 后端 | FastAPI · SQLAlchemy(异步) · aiomysql · passlib/bcrypt · Redis |
+| 后端 | FastAPI · SQLAlchemy(异步) · aiomysql · passlib/bcrypt · PyJWT · Redis |
 | AI | LangChain · LangGraph · Chroma · OpenAI 兼容接口（Chat + Embedding） |
 | 前端 | Vue 3 · Vite · Pinia · Vue Router · Vant · axios · vue-i18n |
 | 数据库 | MySQL 8+ · Redis 7+ |
@@ -76,10 +77,29 @@ python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # Linux / macOS
 
-# 安装依赖
+# 安装依赖（requirements.txt 已包含 PyJWT）
 pip install -r ../requirements.txt
+```
 
-# 启动服务（注意：必须在 toutiao_backend 目录下启动）
+在 `toutiao_backend/.env` 中增加 JWT 配置（没有该文件就新建；密钥至少 32 个字符）：
+
+```env
+JWT_SECRET_KEY=请替换为你自己的随机密钥
+JWT_ALGORITHM=HS256
+JWT_ISSUER=toutiao-api
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+生成随机密钥：
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+然后启动服务（注意：必须在 `toutiao_backend` 目录下启动）：
+
+```bash
 uvicorn main:app --reload --port 8000
 ```
 
@@ -146,11 +166,13 @@ CREATE TABLE `ai_chat` (
 
 | 模块 | 接口 | 说明 |
 | --- | --- | --- |
-| 用户 | `POST /api/user/register` | 注册 |
-| 用户 | `POST /api/user/login` | 登录（返回 Token） |
-| 用户 | `GET /api/user/info` | 获取用户信息 |
-| 用户 | `PUT /api/user/update` | 更新用户信息 |
-| 用户 | `PUT /api/user/password` | 修改密码 |
+| 用户 | `POST /api/user/register` | 注册（返回 accessToken + refreshToken） |
+| 用户 | `POST /api/user/login` | 登录（返回 accessToken + refreshToken） |
+| 用户 | `POST /api/user/refresh` | 用 refreshToken 换取新的 accessToken |
+| 用户 | `POST /api/user/logout` | 登出并撤销 refreshToken |
+| 用户 | `GET /api/user/info` | 获取用户信息（需 Bearer） |
+| 用户 | `PUT /api/user/update` | 更新用户信息（需 Bearer） |
+| 用户 | `PUT /api/user/password` | 修改密码（需 Bearer，成功后需重新登录） |
 | 新闻 | `GET /api/news/categories` | 新闻分类 |
 | 新闻 | `GET /api/news/list` | 新闻列表 |
 | 新闻 | `GET /api/news/detail` | 新闻详情 |
@@ -167,12 +189,94 @@ CREATE TABLE `ai_chat` (
 | AI | `GET /api/ai/chat/history` | AI 历史提问（分页） |
 | AI | `DELETE /api/ai/chat/history` | 清空 AI 历史 |
 
-## 🔐 认证方式
+> 新闻分类、列表、详情是公开接口；用户、收藏、历史、AI 问答接口都需要在请求头携带 `Authorization: Bearer <accessToken>`。
 
-登录成功后返回 Token，需要认证的接口在请求头携带：
+## 🔐 认证方式（JWT 双令牌）
 
+登录/注册成功后，后端会返回两个令牌：
+
+| 令牌 | 类型 | 默认有效期 | 存储位置 | 用途 |
+| --- | --- | --- | --- | --- |
+| `accessToken` | JWT（HS256） | 30 分钟 | 前端 Pinia（持久化到 localStorage） | 访问业务接口 |
+| `refreshToken` | 高熵随机串 | 7 天 | 前端 Pinia；后端 `user_token` 表只存 SHA-256 哈希 | 换取新的 accessToken |
+
+需要认证的接口在请求头携带 accessToken：
+
+```http
+Authorization: Bearer <accessToken>
 ```
-Authorization: <token>
+
+### 登录 / 注册响应示例
+
+```json
+{
+  "code": 200,
+  "message": "User logged in successfully",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+    "refreshToken": "3f9d...（64 位随机串）",
+    "tokenType": "bearer",
+    "expiresIn": 1800,
+    "userInfo": {
+      "id": 1,
+      "username": "admin"
+    }
+  }
+}
 ```
 
-Token 有效期为 7 天。
+### 刷新访问令牌
+
+accessToken 过期后，用 refreshToken 换取新的 accessToken：
+
+```http
+POST /api/user/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "3f9d..."
+}
+```
+
+前端已在 `src/utils/http.js` 中统一处理：axios 收到 401 时会自动调用刷新接口，并重试原请求一次；AI 问答的 SSE 请求使用同一文件里的 `authFetch()`，同样支持自动刷新。
+
+### 登出
+
+```http
+POST /api/user/logout
+Content-Type: application/json
+
+{
+  "refreshToken": "3f9d..."
+}
+```
+
+后端会删除该 refreshToken 的哈希记录。accessToken 本身在过期前仍然有效（默认最多 30 分钟），这是 JWT 无状态的正常特性。
+
+### 修改密码
+
+修改密码成功后，后端会撤销该用户的全部 refreshToken，前端会清空登录态并跳转登录页。用户需要用新密码重新登录。
+
+### JWT 配置
+
+在 `toutiao_backend/.env` 中配置（不要提交到 git）：
+
+```env
+JWT_SECRET_KEY=至少32个字符的随机密钥
+JWT_ALGORITHM=HS256
+JWT_ISSUER=toutiao-api
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+```
+
+> `JWT_SECRET_KEY` 必须至少 32 个字符；生产环境请使用 `python -c "import secrets; print(secrets.token_urlsafe(48))"` 生成，不要使用示例值。
+
+### 从旧版 UUID Token 升级
+
+旧版 `user_token` 表中可能还保留 36 位的 UUID 记录。新代码只接受 JWT，这些旧记录已经无法通过鉴权，但建议部署时清理：
+
+```sql
+DELETE FROM `user_token` WHERE LENGTH(token) = 36;
+```
+
+同时建议让前端清一次旧的 `user-store` 本地缓存（旧缓存里只有 UUID token、没有 refreshToken），否则用户首次打开页面可能会看到 401 错误。

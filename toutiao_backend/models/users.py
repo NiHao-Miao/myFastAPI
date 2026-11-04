@@ -48,7 +48,7 @@ class UserToken(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, comment="Token ID")
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"), nullable=False, comment="用户ID")
-    token: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, comment="Token")
+    token: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, comment="刷新令牌哈希")
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, comment="过期时间")
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
