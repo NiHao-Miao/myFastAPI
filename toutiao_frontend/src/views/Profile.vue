@@ -39,8 +39,6 @@ import { ref, computed, h, onMounted } from 'vue';
 import { useUserStore } from '../store/user';
 import { showDialog, showToast, showLoadingToast, showSuccessToast, showFailToast } from 'vant';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { apiConfig } from '../config/api';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -87,7 +85,8 @@ onMounted(async () => {
 });
 
 const userInfo = computed(() => userStore.userInfo);
-const userId = computed(() => userStore.token ? userStore.token.substring(0, 5) : '');
+// JWT 的 sub 是字符串，页面展示统一用 userInfo.id（数字），避免显示成 undefined
+const userId = computed(() => userStore.userInfo?.id ?? '');
 const userBio = computed(() => userStore.userInfo?.bio || '暂无简介');
 
 const showPasswordConfirm = () => {
@@ -161,7 +160,8 @@ const showPasswordConfirm = () => {
       loadingInstance.close();
       
       if (result && result.success) {
-        showSuccessToast('密码修改成功');
+        showSuccessToast(result.message || '密码修改成功，请重新登录');
+        router.push('/login');
       } else {
         showFailToast((result && result.message) || '密码修改失败');
       }

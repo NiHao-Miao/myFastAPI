@@ -128,6 +128,8 @@ import * as marked from 'marked';
 import DOMPurify from 'dompurify';
 import { aiChatConfig } from '../config/api';
 import { useUserStore } from '../store/user';
+// AI 问答使用 fetch + ReadableStream 读取 SSE；authFetch 会统一加 Bearer 并处理 401 刷新
+import { authFetch } from '../utils/http';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -239,11 +241,10 @@ const sendMessage = async () => {
 
 // 获取AI响应（SSE）
 const fetchAIResponse = async (userMessage) => {
-  const response = await fetch(aiChatConfig.chatEndpoint, {
+  const response = await authFetch(aiChatConfig.chatEndpoint, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': userStore.token
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({ message: userMessage })
   });
@@ -356,12 +357,9 @@ const loadHistory = async (reset = false) => {
 
   historyLoading.value = true;
   try {
-    const response = await fetch(
-      `${aiChatConfig.historyEndpoint}?page=${historyPage.value}&pageSize=10`,
-      {
-        headers: { Authorization: userStore.token }
-      }
-    );
+      const response = await authFetch(
+        `${aiChatConfig.historyEndpoint}?page=${historyPage.value}&pageSize=10`
+      );
 
     if (response.status === 401) {
       userStore.logout();
@@ -407,9 +405,8 @@ const clearHistory = async () => {
   }
 
   try {
-    const response = await fetch(aiChatConfig.historyEndpoint, {
-      method: 'DELETE',
-      headers: { Authorization: userStore.token }
+    const response = await authFetch(aiChatConfig.historyEndpoint, {
+      method: 'DELETE'
     });
 
     if (response.status === 401) {
